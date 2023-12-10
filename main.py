@@ -17,9 +17,9 @@ import re
 
 import numpy as np
 import logging
-import datetime
-from typing import Dict
+from ai_model import  Model, load_data, TickerModel
 import yfinance as yf
+from config import TOKEN
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import (
@@ -31,7 +31,7 @@ from telegram.ext import (
     filters,
 )
 
-TOKEN = "6678303697:AAE0W8V0P4SKhjN_OUy_eBZVgYYlJcQKENc"
+
 # Enable logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -43,9 +43,10 @@ logger = logging.getLogger(__name__)
 
 CHOOSING_TICKERS, PREDICT, EDITING_TICKERS, *_ = range(10)
 
+start_message = 'скинь тикеры через запятую большими буквами'
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text(
-        "скинь тикеры через запятую большими буквами"
+        start_message
     )
     return CHOOSING_TICKERS
 
@@ -72,7 +73,8 @@ async def invalid_input(update: Update, context) -> int:
     return CHOOSING_TICKERS
 
 reply_keyboard = [
-    ["Предсказать"]
+    ["Предсказать"],
+    ['Начать заново']
 ]
 markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
 
@@ -93,20 +95,14 @@ async def tickers_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         return CHOOSING_TICKERS
 
 
-class AI_predictor:
 
-    def __init__(self, model_path):
-        model = None
-
-    def predict(self, ticker):
-        return 1
 
 def strategy_predict(ticker):
     return 0
 
-def make_prediction(ticker):
-    prediction_mapping = {1: '📈 покупать', -1: '📉 продавать', 0: '➡️ держать'}
-    ai_prediction = ai_predictor.predict(ticker)
+def make_prediction(ticker, prices):
+    prediction_mapping = {1: '📈 покупать', -1: '📉 продавать', 0: '➡️ удерживать'}
+    ai_prediction = ai_predictor.predict(prices)
     strategy_prediction = strategy_predict(ticker)
     return f"{ticker}\n🤖: {prediction_mapping[ai_prediction]} 🧮: {prediction_mapping[strategy_prediction]}\n"
 #
@@ -121,7 +117,8 @@ def make_prediction(ticker):
 
 async def write_prediction(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     tickers = context.user_data["tickers"]
-    predictions_for_tickers = [make_prediction(ticker) for ticker in tickers]
+    context.user_data['companies'] = context.user_data.get('companies', load_data(tickers))
+    predictions_for_tickers = [make_prediction(ticker, context.user_data['companies'][ticker]) for ticker in tickers]
     text = '\n'.join(predictions_for_tickers)
     await update.message.reply_text(f"Прогноз:\n🤖 - AI\n🧮 - тех. анализ\n\n{text}")
     return PREDICT
@@ -136,6 +133,11 @@ async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_data.clear()
     return ConversationHandler.END
 
+async def restart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user_data = context.user_data
+    user_data.clear()
+    await update.message.reply_text(start_message)
+    return CHOOSING_TICKERS
 
 def main() -> None:
     """Run the bot."""
@@ -157,7 +159,8 @@ def main() -> None:
                     filters.Regex('^Предсказать$'), write_prediction)
             ],
         },
-        fallbacks=[CommandHandler('end', done)],
+        fallbacks=[CommandHandler('end', done),
+                   MessageHandler(filters.Regex("^Начать заново$"), restart)],
     )
 
     application.add_handler(conv_handler)
@@ -167,5 +170,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    ai_predictor = AI_predictor('model_path')
+    ai_predictor = Model('ticker_model_31.99.pth')
     main()
