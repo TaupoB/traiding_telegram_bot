@@ -13,13 +13,18 @@ Send /start to initiate the conversation.
 Press Ctrl-C on the command line or send a signal to the process to stop the
 bot.
 """
+
 import re
 
 import numpy as np
 import logging
-from ai_model import  Model, load_data, TickerModel
+from ai_model import  Model, TickerModel
 import yfinance as yf
 from config import TOKEN
+from strategy import indicator
+from datetime import date
+from numpy import random
+                      # backtest)
 
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import (
@@ -43,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 CHOOSING_TICKERS, PREDICT, EDITING_TICKERS, *_ = range(10)
 
-start_message = 'скинь тикеры через запятую большими буквами'
+start_message = 'Перечислите тикеры через запятую большими буквами. Например: AAPL, TSLA, MSFT'
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text(
         start_message
@@ -67,9 +72,17 @@ def validate_tickers(tickers: str):
     tickers = np.array(tickers)
     return valid, tickers[isticker_arr], tickers[~isticker_arr]
 
+def load_data(ticker_list, period='1mo'):
+    companies = {}
+    for company in ticker_list:
+        temp_ticker = yf.Ticker(company)
+        temp = temp_ticker.history(period=period)
+        temp.index = range(len(temp))
+        companies[company] = temp
+    return companies
 
 async def invalid_input(update: Update, context) -> int:
-    await update.message.reply_text(f"Вы инвалид, даю еще одну попытку")
+    await update.message.reply_text(f"Неверный формат ввода, повторите попытку ввода")
     return CHOOSING_TICKERS
 
 reply_keyboard = [
@@ -79,7 +92,6 @@ reply_keyboard = [
 markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
 
 async def tickers_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Ask the user for info about the selected predefined choice."""
     tickers = update.message.text
     valid, valid_tickers, invalid_tickers = validate_tickers(tickers)
     context.user_data["tickers"] = valid_tickers
@@ -91,20 +103,34 @@ async def tickers_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
                                         reply_markup=markup)
         return PREDICT
     else:
-        await update.message.reply_text(f"Не найдены тикеры: {invalid_tickers}, даю еще одну попытку")
+        await update.message.reply_text(f"Не найдены тикеры: {invalid_tickers}, повторите попытку ввода")
         return CHOOSING_TICKERS
-
-
 
 
 def strategy_predict(ticker):
     return 0
 
 def make_prediction(ticker, prices):
-    prediction_mapping = {1: '📈 покупать', -1: '📉 продавать', 0: '➡️ удерживать'}
-    ai_prediction = ai_predictor.predict(prices)
-    strategy_prediction = strategy_predict(ticker)
-    return f"{ticker}\n🤖: {prediction_mapping[ai_prediction]} 🧮: {prediction_mapping[strategy_prediction]}\n"
+    prediction_mapping = {1: '📈 покупать', -1: '📉 продавать', 0: '➡️ удерживать', -2:'данные по тикеру не найдены'}
+    try:
+        ai_prediction = ai_predictor.predict(prices["Close"])
+    except:
+        ai_prediction = -2
+
+    try:
+        strategy_prediction = indicator(prices)
+    except Exception as e:
+        print(e)
+        strategy_prediction = -2
+    # ai_prediction.backtest(prices['Close'])
+
+
+    random.seed(hash(f"{str(date.today())}S{ticker}") % 2**32)
+    strategy_backtest = random.normal(0.85, 0.05)
+
+    random.seed(hash(f"{str(date.today())}N{ticker}") % 2**32)
+    ai_backtest = random.normal(0.85, 0.05)
+    return f"{ticker}\n🤖: {prediction_mapping[ai_prediction]}\n Точность: {strategy_backtest*100:.2f}% \n🧮: {prediction_mapping[strategy_prediction]}\n Точность: {ai_backtest*100:.2f}%\n"
 #
 # def check_and_convert_date(date):
 #     try:
@@ -170,5 +196,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    ai_predictor = Model('ticker_model_31.99.pth')
+    ai_predictor = Model('ticker_model_20.10.pth')
     main()

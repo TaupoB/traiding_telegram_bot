@@ -1,14 +1,7 @@
 import torch
 import yfinance as yf
 
-def load_data(ticker_list, period='1mo'):
-    companies = {}
-    for company in ticker_list:
-        temp_ticker = yf.Ticker(company)
-        temp = temp_ticker.history(period=period)['Close']
-        temp.index = range(len(temp))
-        companies[company] = temp
-    return companies
+
 
 
 class TickerModel(torch.nn.Module):
@@ -32,7 +25,7 @@ class TickerModel(torch.nn.Module):
 class Model:
 
     def __init__(self, model_path):
-        self.model = torch.load(model_path)
+        self.model = torch.load(model_path, map_location='cpu')
         self.model.eval()
 
     def predict_with_price(self, prices, alpha=0.00112):
