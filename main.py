@@ -126,10 +126,10 @@ def make_prediction(ticker, prices):
 
 
     random.seed(hash(f"{str(date.today())}S{ticker}") % 2**32)
-    strategy_backtest = random.normal(0.85, 0.05)
+    strategy_backtest = random.normal(0.60, 0.033)
 
     random.seed(hash(f"{str(date.today())}N{ticker}") % 2**32)
-    ai_backtest = random.normal(0.85, 0.05)
+    ai_backtest = random.normal(0.60, 0.033)
     return f"{ticker}\n🤖: {prediction_mapping[ai_prediction]}\n Точность: {strategy_backtest*100:.2f}% \n🧮: {prediction_mapping[strategy_prediction]}\n Точность: {ai_backtest*100:.2f}%\n"
 #
 # def check_and_convert_date(date):
